@@ -18,40 +18,77 @@
     P.removeItem = wrap(P.removeItem);
   } catch { /* storage blocked: the page copes on its own */ }
 
-  const post = (m) => { if (embedded) window.parent.postMessage({ synth: V, engine: cfg.engine, ...m }, "*"); };
+  const post = (m, transfer) => {
+    if (embedded) window.parent.postMessage({ synth: V, engine: cfg.engine, ...m }, "*", transfer || []);
+  };
 
-  // Audio: everything the page connects to a destination goes through one gain per context. The host
-  // sets its level (mute, volume); Phase 2's capture tap will hang off it too.
+  // Audio: everything the page connects to a destination goes into one "pre" node per context, then
+  // through the host's gain (mute, volume) to the destination. The tap records "pre": what the engine
+  // plays, whatever the host's level, as a server records a radio whatever its listeners hear.
   let volume = 1, muted = false, started = false;
   const level = () => (muted ? 0 : volume);
-  const outs = new Map(); // AudioContext -> GainNode
-  const setStarted = () => { if (!started) { started = true; post({ t: "started" }); } };
+  const outs = new Map(); // AudioContext -> { pre, gain }
+  const setStarted = () => { if (!started) { started = true; post({ t: "started" }); } startTap(); };
   const connect = AudioNode.prototype.connect;
   AudioNode.prototype.connect = function (dest, ...rest) {
     if (!(dest instanceof AudioDestinationNode)) return connect.call(this, dest, ...rest);
     const ctx = dest.context;
-    let g = outs.get(ctx);
-    if (!g) {
-      g = ctx.createGain();
-      g.gain.value = level();
-      connect.call(g, dest);
-      outs.set(ctx, g);
+    let o = outs.get(ctx);
+    if (!o) {
+      o = { pre: ctx.createGain(), gain: ctx.createGain() };
+      o.gain.gain.value = level();
+      connect.call(o.pre, o.gain);
+      connect.call(o.gain, dest);
+      outs.set(ctx, o);
       ctx.addEventListener("statechange", () => { if (ctx.state === "running") setStarted(); });
       if (ctx.state === "running") setStarted();
     }
-    connect.call(this, g, ...rest);
+    connect.call(this, o.pre, ...rest);
     return dest;
   };
-  const applyLevel = () => { for (const g of outs.values()) g.gain.setTargetAtTime(level(), g.context.currentTime, 0.02); };
+  const applyLevel = () => {
+    for (const { gain } of outs.values()) gain.gain.setTargetAtTime(level(), gain.context.currentTime, 0.02);
+  };
+
+  // The tap: MediaRecorder on "pre", one chunk a second to the host, in order. Each recorder has an id
+  // (rid) and counts its chunks from 0; the first chunk holds the container's header.
+  const MIMES = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
+  let tapOn = false, rec = null, rids = 0;
+  function startTap() {
+    if (!tapOn || rec || !started) return;
+    const [ctx, o] = outs.entries().next().value || [];
+    if (!ctx) return;
+    if (typeof MediaRecorder === "undefined") { post({ t: "tap-error", error: "no MediaRecorder" }); return; }
+    const mimeType = MIMES.find((m) => MediaRecorder.isTypeSupported(m));
+    const dest = ctx.createMediaStreamDestination();
+    connect.call(o.pre, dest);
+    const r = rec = new MediaRecorder(dest.stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 128000 });
+    const rid = ++rids;
+    let seq = 0, chain = Promise.resolve();
+    r.ondataavailable = (e) => {
+      if (!e.data.size) return;
+      const n = seq++;
+      chain = chain.then(() => e.data.arrayBuffer()).then((data) => post({ t: "chunk", rid, seq: n, mime: r.mimeType, data }, [data]));
+    };
+    r.onstop = () => { try { o.pre.disconnect(dest); } catch { /* gone */ } };
+    r.onerror = (e) => post({ t: "tap-error", error: String(e.error || e) });
+    r.start(1000);
+  }
+  function stopTap() {
+    const r = rec;
+    rec = null;
+    if (r && r.state !== "inactive") r.stop();
+  }
 
   // Host -> engine.
-  const hello = () => post({ t: "ready", v: V, started, muted, volume });
+  const hello = () => post({ t: "ready", v: V, started, muted, volume, tap: tapOn });
   addEventListener("message", (e) => {
     const m = e.data;
     if (e.source !== window.parent || !m || m.synth !== V) return;
     if (m.t === "hello") hello();
     else if (m.t === "mute") { muted = !!m.on; applyLevel(); }
     else if (m.t === "volume") { volume = Math.max(0, Math.min(1, Number(m.v) || 0)); applyLevel(); }
+    else if (m.t === "tap") { tapOn = !!m.on; if (tapOn) startTap(); else stopTap(); }
   });
 
   // Shift+Escape gives the focus back to the host. Plain Escape stays the engine's (the FM-1's HOME).
