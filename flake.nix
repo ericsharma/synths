@@ -24,7 +24,10 @@
         "aarch64-linux"
       ];
       forAll = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-      engines = import ./engines { inherit inputs; inherit (nixpkgs) lib; };
+      engines = import ./engines {
+        inherit inputs;
+        inherit (nixpkgs) lib;
+      };
       build =
         pkgs:
         let
@@ -46,6 +49,6 @@
       packages = forAll (pkgs: build pkgs // { default = (build pkgs).site; });
       # Each engine's build runs its own sound test (checkPhase), so building is checking.
       checks = forAll build;
-      formatter = forAll (pkgs: pkgs.nixfmt-rfc-style);
+      formatter = forAll (pkgs: pkgs.nixfmt-tree);
     };
 }
