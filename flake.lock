@@ -1,0 +1,61 @@
+{
+  "nodes": {
+    "fm1-dub": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794165565,
+        "narHash": "sha256-BoKQ9SL6ANbi6fZjfDfAPWyRlHtZqxcH9uqhM+TXvdY=",
+        "owner": "sbegueria",
+        "repo": "fm1-dub",
+        "rev": "a50587fe1dc1f38d706e7b0099385a65b461b2c5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sbegueria",
+        "repo": "fm1-dub",
+        "type": "github"
+      }
+    },
+    "fm1-nachtfahrt": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793666849,
+        "narHash": "sha256-AUMNGVx70+clNIxY40HFa0YEfE8BEDjnT0nQtxqZBgQ=",
+        "owner": "FartyPants",
+        "repo": "fm1-nachtfahrt",
+        "rev": "ba0728378f9a9aa5ef1f69027c42d03319f7ef8e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "FartyPants",
+        "repo": "fm1-nachtfahrt",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1794552581,
+        "narHash": "sha256-qXFIqA6FCcx7XeDzw0ZNlkDT9UiCzrNDwK8RuU8RcHM=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-26.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "fm1-dub": "fm1-dub",
+        "fm1-nachtfahrt": "fm1-nachtfahrt",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
